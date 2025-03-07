@@ -150,15 +150,6 @@ func InfoBot(addr ble.Addr) error {
 		return err
 	}
 
-	// 書き込みを有効化
-	err = client.WriteCharacteristic(
-		writeChar,
-		[]byte{0x01},
-		false,
-	)
-	if err != nil {
-		return err
-	}
 	// リクエストを送信
 	err = client.WriteCharacteristic(
 		writeChar,
