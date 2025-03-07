@@ -20,25 +20,45 @@ func main() {
 	}
 	ble.SetDefaultDevice(device)
 
-	addrs := ScanBot()
+	addrs, encrypted := ScanBot()
 	if len(addrs) == 0 {
 		fmt.Println("SwitchBot-Bot not found")
 		return
 	}
 	for i, a := range addrs {
-		fmt.Printf("SwitchBot-Bot %d\n", i+1)
-		err := InfoBot(a)
-		if err != nil {
-			fmt.Printf("Failed to get info: %v\n", err)
+		if encrypted[i] {
+			fmt.Printf("%d SwitchBot-Bot (%v) - (encrypted)\n", i+1, a)
+		} else {
+			fmt.Printf("%d SwitchBot-Bot (%v)", i+1, a)
 		}
 	}
+	fmt.Print(" > ")
+	var n int
+	_, err = fmt.Scanf("%d", &n)
+	if err != nil {
+		fmt.Println("Invalid input")
+		return
+	}
+	if n < 1 || n > len(addrs) {
+		fmt.Println("Invalid input")
+		return
+	}
+	addr := addrs[n-1]
+	info, err := InfoBot(addr)
+	if err != nil {
+		fmt.Printf("Failed to get info: %v\n", err)
+		return
+	}
+	fmt.Printf("SwitchBot-Bot (%v)\n", addr)
+	fmt.Println(info)
 }
 
-func ScanBot() []ble.Addr {
+func ScanBot() ([]ble.Addr, []bool) {
 	ctx := ble.WithSigHandler(
 		context.WithTimeout(context.Background(), 2*time.Second),
 	)
 	addr := []ble.Addr{}
+	encrypted := []bool{}
 	var mutex = &sync.Mutex{}
 
 	ble.Scan(ctx,
@@ -56,10 +76,10 @@ func ScanBot() []ble.Addr {
 				// 暗号化なしなら 0x48
 				// 暗号化ありなら 0xc8 で始まる
 				if d.Data[0] == 0x48 {
-					fmt.Printf("%d SwitchBot-Bot (%v)\n", len(addr), a.Addr())
+					encrypted = append(encrypted, false)
 				}
 				if d.Data[0] == 0xc8 {
-					fmt.Printf("%d SwitchBot-Bot (%v) - (encrypted)\n", len(addr), a.Addr())
+					encrypted = append(encrypted, true)
 				}
 				mutex.Unlock()
 			}
@@ -80,11 +100,27 @@ func ScanBot() []ble.Addr {
 			return false
 		},
 	)
-	return addr
+	return addr, encrypted
+}
+
+type BotInfo struct {
+	Battery           int
+	Firmware          float64
+	Strength          int
+	ADC               int
+	MotorCalibration  int
+	Timer             int
+	ActMode           byte
+	HoldAndPressTimes int
+}
+
+func (b *BotInfo) String() string {
+	return fmt.Sprintf("Battery: %d%%, Firmware: %.1f, Strength: %d, ADC: %d, Motor Calibration: %d, Timer: %d, Act Mode: %X, Hold-and-press Times: %d",
+		b.Battery, b.Firmware, b.Strength, b.ADC, b.MotorCalibration, b.Timer, b.ActMode, b.HoldAndPressTimes)
 }
 
 // SwitchBot-Bot の情報を取得する
-func InfoBot(addr ble.Addr) error {
+func InfoBot(addr ble.Addr) (*BotInfo, error) {
 	ctx := ble.WithSigHandler(
 		context.WithTimeout(context.Background(), 2*time.Second),
 	)
@@ -92,26 +128,26 @@ func InfoBot(addr ble.Addr) error {
 		return a.Addr().String() == addr.String()
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if client == nil {
-		return fmt.Errorf("client is nil")
+		return nil, fmt.Errorf("client is nil")
 	}
 	defer client.CancelConnection()
 
 	notifyChar, writeChar, err := getNotifyWriteCharacteristic(client)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if notifyChar == nil {
-		return fmt.Errorf("notify characteristic not found")
+		return nil, fmt.Errorf("notify characteristic not found")
 	}
 	if writeChar == nil {
-		return fmt.Errorf("write characteristic not found")
+		return nil, fmt.Errorf("write characteristic not found")
 	}
 	err = enableNotify(client, notifyChar)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// 結果をsubscribeで受け取る
@@ -119,6 +155,8 @@ func InfoBot(addr ble.Addr) error {
 		context.Background(),
 		20*time.Second,
 	)
+
+	var botinfo *BotInfo
 	err = client.Subscribe(
 		notifyChar,
 		false,
@@ -128,26 +166,20 @@ func InfoBot(addr ble.Addr) error {
 				fmt.Printf("Response Status Error: %v\n", data[0])
 				return
 			}
-			// Byte 0: Battery percentage
-			fmt.Printf("Battery: %d%%\n", data[1])
-			// Byte 1: Firmware Version
-			fmt.Printf("Firmware: %.1f\n", float64(data[2])/10)
-			// Byte 2: The strength to push button
-			fmt.Printf("Strength: %d\n", data[3])
-			// Byte 3-4: The ADC value read from sensor
-			fmt.Printf("ADC: %d\n", int(data[4])<<8|int(data[5]))
-			// Byte 5-6: The motor calibration value
-			fmt.Printf("Motor Calibration: %d\n", int(data[6])<<8|int(data[7]))
-			// Byte 7: The number of Timer
-			fmt.Printf("Timer: %d\n", data[8])
-			// Byte 8: The act mode of Bot:
-			fmt.Printf("Act Mode: %X\n", data[9])
-			// Byte 9: Hold-and-press Times
-			fmt.Printf("Hold-and-press Times: %d\n", data[10])
+			botinfo = &BotInfo{
+				Battery:           int(data[1]),
+				Firmware:          float64(data[2]) / 10,
+				Strength:          int(data[3]),
+				ADC:               int(data[4]),
+				MotorCalibration:  int(data[5]),
+				Timer:             int(data[6]),
+				ActMode:           data[7],
+				HoldAndPressTimes: int(data[8]),
+			}
 		},
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// リクエストを送信
@@ -157,11 +189,11 @@ func InfoBot(addr ble.Addr) error {
 		false,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	<-ctx.Done()
-	return nil
+	return botinfo, nil
 }
 
 func getNotifyWriteCharacteristic(client ble.Client) (*ble.Characteristic, *ble.Characteristic, error) {
