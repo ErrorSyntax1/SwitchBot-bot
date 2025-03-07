@@ -34,10 +34,6 @@ func ScanBot() error {
 		false,
 		func(a ble.Advertisement) {
 			data := a.ServiceData()
-			if len(data) == 0 {
-				return
-			}
-			// ServiceData.UUID == ble.UUID{0x3d, 0xfd} ならば、SwitchBot製品
 			for _, d := range data {
 				if !d.UUID.Equal(ble.UUID{0x3d, 0xfd}) {
 					continue
@@ -57,6 +53,7 @@ func ScanBot() error {
 			if len(a.ServiceData()) == 0 {
 				return false
 			}
+			// ServiceData.UUID == ble.UUID{0x3d, 0xfd} ならば、SwitchBot製品
 			for _, d := range a.ServiceData() {
 				if !d.UUID.Equal(ble.UUID{0x3d, 0xfd}) {
 					continue
