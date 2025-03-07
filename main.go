@@ -89,7 +89,7 @@ func InfoBot(addr ble.Addr) error {
 		context.WithTimeout(context.Background(), 2*time.Second),
 	)
 	client, err := ble.Connect(ctx, func(a ble.Advertisement) bool {
-		return a.Addr() == addr
+		return a.Addr().String() == addr.String()
 	})
 	if err != nil {
 		fmt.Printf("%v\n", err)
