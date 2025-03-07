@@ -157,7 +157,7 @@ func InfoBot(addr ble.Addr) error {
 	err = client.WriteCharacteristic(
 		writeChar,
 		[]byte{0x57, 0x02},
-		true,
+		false,
 	)
 	if err != nil {
 		return err
