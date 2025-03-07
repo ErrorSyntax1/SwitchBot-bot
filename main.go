@@ -26,7 +26,7 @@ func main() {
 		return
 	}
 	for i, a := range addrs {
-		fmt.Printf("SwitchBot-Bot %d\n", i)
+		fmt.Printf("SwitchBot-Bot %d\n", i+1)
 		err := InfoBot(a)
 		if err != nil {
 			fmt.Printf("Failed to get info: %v\n", err)
@@ -120,7 +120,7 @@ func InfoBot(addr ble.Addr) error {
 	// 結果をsubscribeで受け取る
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
-		10*time.Second,
+		20*time.Second,
 	)
 	err = client.Subscribe(
 		notifyChar,
