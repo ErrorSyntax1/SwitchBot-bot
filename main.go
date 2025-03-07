@@ -141,7 +141,7 @@ func InfoBot(addr ble.Addr) error {
 			// Byte 7: The number of Timer
 			fmt.Printf("Timer: %d\n", data[8])
 			// Byte 8: The act mode of Bot:
-			fmt.Printf("Act Mode: %v\n", data[9])
+			fmt.Printf("Act Mode: %X\n", data[9])
 			// Byte 9: Hold-and-press Times
 			fmt.Printf("Hold-and-press Times: %d\n", data[10])
 		},
