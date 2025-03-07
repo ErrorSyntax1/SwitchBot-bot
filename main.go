@@ -92,7 +92,7 @@ func InfoBot(addr ble.Addr) error {
 		return a.Addr().String() == addr.String()
 	})
 	if err != nil {
-		fmt.Printf("%v\n", err)
+		return err
 	}
 	if client == nil {
 		return fmt.Errorf("client is nil")
