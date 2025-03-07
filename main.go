@@ -99,24 +99,21 @@ func InfoBot(addr ble.Addr) error {
 	}
 	defer client.CancelConnection()
 
-	notifyChar, err := getNotifyCharacteristic(client)
+	notifyChar, writeChar, err := getNotifyWriteCharacteristic(client)
 	if err != nil {
 		return err
 	}
 	if notifyChar == nil {
 		return fmt.Errorf("notify characteristic not found")
 	}
+	if writeChar == nil {
+		return fmt.Errorf("write characteristic not found")
+	}
 	err = enableNotify(client, notifyChar)
 	if err != nil {
 		return err
 	}
-	writeChar, err := getWriteCharacterics(client)
-	if err != nil {
-		return err
-	}
-	if writeChar == nil {
-		return fmt.Errorf("write characteristic not found")
-	}
+
 	// 結果をsubscribeで受け取る
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
@@ -157,7 +154,7 @@ func InfoBot(addr ble.Addr) error {
 	err = client.WriteCharacteristic(
 		writeChar,
 		[]byte{0x01},
-		true,
+		false,
 	)
 	if err != nil {
 		return err
@@ -176,29 +173,34 @@ func InfoBot(addr ble.Addr) error {
 	return nil
 }
 
-func getNotifyCharacteristic(client ble.Client) (*ble.Characteristic, error) {
+func getNotifyWriteCharacteristic(client ble.Client) (*ble.Characteristic, *ble.Characteristic, error) {
 	// comminucation service uuid は cba20d00-224d-11e6-9fb8-0002a5d5c51b
 	service, err := client.DiscoverServices(
 		[]ble.UUID{ble.MustParse("cba20d00-224d-11e6-9fb8-0002a5d5c51b")},
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(service) == 0 {
-		return nil, fmt.Errorf("service not found")
+		return nil, nil, fmt.Errorf("service not found")
 	}
 	// Notify の characteristic UUID は cba20003-224d-11e6-9fb8-0002a5d5c51b
-	notifychar, err := client.DiscoverCharacteristics(
-		[]ble.UUID{ble.MustParse("cba20003-224d-11e6-9fb8-0002a5d5c51b")},
+	// Write の characteristic UUID は cba20002-224d-11e6-9fb8-0002a5d5c51b
+	chars, err := client.DiscoverCharacteristics(
+		[]ble.UUID{ble.MustParse("cba20003-224d-11e6-9fb8-0002a5d5c51b"),
+			ble.MustParse("cba20002-224d-11e6-9fb8-0002a5d5c51b")},
 		service[0],
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if len(notifychar) == 0 {
-		return nil, fmt.Errorf("characteristic not found")
+	if len(chars) <= 1 {
+		return nil, nil, fmt.Errorf("characteristic not found")
 	}
-	return notifychar[0], nil
+	if chars[0].UUID.Equal(ble.MustParse("cba20003-224d-11e6-9fb8-0002a5d5c51b")) {
+		return chars[0], chars[1], nil
+	}
+	return chars[1], chars[0], nil
 }
 
 func enableNotify(client ble.Client, notifyChar *ble.Characteristic) error {
@@ -207,7 +209,7 @@ func enableNotify(client ble.Client, notifyChar *ble.Characteristic) error {
 	}
 	// descriptor 0x2902 に 0x01 を書き込むことで、notify を有効にする
 	descriptor, err := client.DiscoverDescriptors(
-		[]ble.UUID{ble.MustParse("2902")},
+		[]ble.UUID{ble.UUID16(0x2902)},
 		notifyChar,
 	)
 	if err != nil {
@@ -224,29 +226,4 @@ func enableNotify(client ble.Client, notifyChar *ble.Characteristic) error {
 		return err
 	}
 	return nil
-}
-
-func getWriteCharacterics(client ble.Client) (*ble.Characteristic, error) {
-	// comminucation service uuid は cba20d00-224d-11e6-9fb8-0002a5d5c51b
-	service, err := client.DiscoverServices(
-		[]ble.UUID{ble.MustParse("cba20d00-224d-11e6-9fb8-0002a5d5c51b")},
-	)
-	if err != nil {
-		return nil, err
-	}
-	if len(service) == 0 {
-		return nil, fmt.Errorf("service not found")
-	}
-	// Write の characteristic UUID は cba20002-224d-11e6-9fb8-0002a5d5c51b
-	writechar, err := client.DiscoverCharacteristics(
-		[]ble.UUID{ble.MustParse("cba20002-224d-11e6-9fb8-0002a5d5c51b")},
-		service[0],
-	)
-	if err != nil {
-		return nil, err
-	}
-	if len(writechar) == 0 {
-		return nil, fmt.Errorf("characteristic not found")
-	}
-	return writechar[0], nil
 }
