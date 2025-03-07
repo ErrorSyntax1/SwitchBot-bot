@@ -54,7 +54,18 @@ func ScanBot() error {
 			}
 		},
 		func(a ble.Advertisement) bool {
-			return true
+			if len(a.ServiceData()) == 0 {
+				return false
+			}
+			for _, d := range a.ServiceData() {
+				if d.UUID.Equal(ble.UUID{0x3d, 0xfd}) {
+					continue
+				}
+				if d.Data[0] == 0x48 || d.Data[0] == 0xc8 {
+					return true
+				}
+			}
+			return false
 		},
 	)
 	return err
