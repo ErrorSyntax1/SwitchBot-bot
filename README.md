@@ -1,0 +1,1 @@
+# SwitchBot-bot
