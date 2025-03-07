@@ -29,7 +29,7 @@ func main() {
 		if encrypted[i] {
 			fmt.Printf("%d SwitchBot-Bot (%v) - (encrypted)\n", i+1, a)
 		} else {
-			fmt.Printf("%d SwitchBot-Bot (%v)", i+1, a)
+			fmt.Printf("%d SwitchBot-Bot (%v)\n", i+1, a)
 		}
 	}
 	fmt.Print(" > ")
