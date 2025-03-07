@@ -170,11 +170,11 @@ func InfoBot(addr ble.Addr) (*BotInfo, error) {
 				Battery:           int(data[1]),
 				Firmware:          float64(data[2]) / 10,
 				Strength:          int(data[3]),
-				ADC:               int(data[4]),
-				MotorCalibration:  int(data[5]),
-				Timer:             int(data[6]),
-				ActMode:           data[7],
-				HoldAndPressTimes: int(data[8]),
+				ADC:               int(data[4])<<8 | int(data[5]),
+				MotorCalibration:  int(data[6])<<8 | int(data[7]),
+				Timer:             int(data[8]),
+				ActMode:           data[9],
+				HoldAndPressTimes: int(data[10]),
 			}
 		},
 	)
