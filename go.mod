@@ -1,6 +1,6 @@
 module github.com/ErrorSyntax1/SwitchBot-bot
 
-go 1.23.2
+go 1.19
 
 require github.com/go-ble/ble v0.0.0-20240122180141-8c5522f54333
 
