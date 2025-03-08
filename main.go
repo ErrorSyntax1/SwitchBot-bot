@@ -263,7 +263,7 @@ func enableNotify(client ble.Client, notifyChar *ble.Characteristic) error {
 }
 
 // mode:
-// true  -> press (if state is false, do nothing)
+// true  -> press (state は無視される)
 // false -> switch
 func ActBot(addr ble.Addr, mode, state bool) error {
 	ctx := ble.WithSigHandler(
@@ -288,10 +288,7 @@ func ActBot(addr ble.Addr, mode, state bool) error {
 		return fmt.Errorf("write characteristic not found")
 	}
 	reqMessage := []byte{0x57, 0x01}
-	if !mode {
-		if !state {
-			return nil
-		}
+	if mode {
 		reqMessage = append(reqMessage, 0x00)
 	} else {
 		if state {
