@@ -288,7 +288,7 @@ func ActBot(addr ble.Addr, mode, state bool) error {
 		return fmt.Errorf("write characteristic not found")
 	}
 	reqMessage := []byte{0x57, 0x01}
-	if mode {
+	if !mode {
 		if !state {
 			return nil
 		}
