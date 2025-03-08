@@ -303,7 +303,7 @@ func ActBot(addr ble.Addr, mode, state bool) error {
 	err = client.WriteCharacteristic(
 		writeChar,
 		reqMessage,
-		true,
+		false,
 	)
 	if err != nil {
 		return err
