@@ -20,16 +20,16 @@ func main() {
 	}
 	ble.SetDefaultDevice(device)
 
-	addrs, encrypted := ScanBot()
-	if len(addrs) == 0 {
+	states := ScanBot()
+	if len(states) == 0 {
 		fmt.Println("SwitchBot-Bot not found")
 		return
 	}
-	for i, a := range addrs {
-		if encrypted[i] {
-			fmt.Printf("%d SwitchBot-Bot (%v) - (encrypted)\n", i+1, a)
+	for i, s := range states {
+		if s.IsEncrypted {
+			fmt.Printf("%d SwitchBot-Bot (%v) - (encrypted)\n", i+1, s.Addr)
 		} else {
-			fmt.Printf("%d SwitchBot-Bot (%v)\n", i+1, a)
+			fmt.Printf("%d SwitchBot-Bot (%v)\n", i+1, s.Addr)
 		}
 	}
 	fmt.Print(" > ")
@@ -39,11 +39,11 @@ func main() {
 		fmt.Println("Invalid input")
 		return
 	}
-	if n < 1 || n > len(addrs) {
+	if n < 1 || n > len(states) {
 		fmt.Println("Invalid input")
 		return
 	}
-	addr := addrs[n-1]
+	addr := states[n-1].Addr
 	info, err := InfoBot(addr)
 	if err != nil {
 		fmt.Printf("Failed to get info: %v\n", err)
@@ -51,14 +51,26 @@ func main() {
 	}
 	fmt.Printf("SwitchBot-Bot (%v)\n", addr)
 	fmt.Println(info)
+
+	err = ActBot(addr, states[n-1].Mode, states[n-1].State)
+	if err != nil {
+		fmt.Printf("Failed to act: %v\n", err)
+		return
+	}
 }
 
-func ScanBot() ([]ble.Addr, []bool) {
+type BotState struct {
+	Addr        ble.Addr
+	IsEncrypted bool
+	Mode        bool
+	State       bool
+}
+
+func ScanBot() []BotState {
 	ctx := ble.WithSigHandler(
 		context.WithTimeout(context.Background(), 2*time.Second),
 	)
-	addr := []ble.Addr{}
-	encrypted := []bool{}
+	state := []BotState{}
 	var mutex = &sync.Mutex{}
 
 	ble.Scan(ctx,
@@ -70,17 +82,16 @@ func ScanBot() ([]ble.Addr, []bool) {
 					continue
 				}
 				mutex.Lock()
-				addr = append(addr, a.Addr())
 
-				// SwitchBot-Botの ServiceData.data は
-				// 暗号化なしなら 0x48
-				// 暗号化ありなら 0xc8 で始まる
-				if d.Data[0] == 0x48 {
-					encrypted = append(encrypted, false)
-				}
-				if d.Data[0] == 0xc8 {
-					encrypted = append(encrypted, true)
-				}
+				// // SwitchBot-Botの ServiceData.data は
+				// // 暗号化なしなら 0x48
+				// // 暗号化ありなら 0xc8 で始まる
+				state = append(state, BotState{
+					Addr:        a.Addr(),
+					IsEncrypted: d.Data[0] == 0xc8,
+					Mode:        d.Data[1]>>7&1 == 1,
+					State:       d.Data[1]>>6&1 == 1,
+				})
 				mutex.Unlock()
 			}
 		},
@@ -100,7 +111,7 @@ func ScanBot() ([]ble.Addr, []bool) {
 			return false
 		},
 	)
-	return addr, encrypted
+	return state
 }
 
 type BotInfo struct {
@@ -244,6 +255,52 @@ func enableNotify(client ble.Client, notifyChar *ble.Characteristic) error {
 	err = client.WriteDescriptor(
 		descriptor[0],
 		[]byte{0x01},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// mode:
+// true  -> press (state は無視される)
+// false -> switch
+func ActBot(addr ble.Addr, mode, state bool) error {
+	ctx := ble.WithSigHandler(
+		context.WithTimeout(context.Background(), 2*time.Second),
+	)
+	client, err := ble.Connect(ctx, func(a ble.Advertisement) bool {
+		return a.Addr().String() == addr.String()
+	})
+	if err != nil {
+		return err
+	}
+	if client == nil {
+		return fmt.Errorf("client is nil")
+	}
+	defer client.CancelConnection()
+
+	_, writeChar, err := getNotifyWriteCharacteristic(client)
+	if err != nil {
+		return err
+	}
+	if writeChar == nil {
+		return fmt.Errorf("write characteristic not found")
+	}
+	reqMessage := []byte{0x57, 0x01}
+	if mode {
+		reqMessage = append(reqMessage, 0x00)
+	} else {
+		if state {
+			reqMessage = append(reqMessage, 0x01)
+		} else {
+			reqMessage = append(reqMessage, 0x02)
+		}
+	}
+	err = client.WriteCharacteristic(
+		writeChar,
+		reqMessage,
+		false,
 	)
 	if err != nil {
 		return err
